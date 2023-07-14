@@ -571,23 +571,30 @@ class WC_Product_CSV_Importer extends WC_Product_Importer {
 
 	/**
 	 * Parse dates from a CSV.
-	 * Dates requires the format YYYY-MM-DD and time is optional.
+	 * Value returned will be Unix timestamp or null.
 	 *
 	 * @param string $value Field value.
 	 *
-	 * @return string|null
+	 * @return int|null
+	 * 
+	 * @see plugins/woocommerce/includes/abstracts/abstract-wc-data.php::set_date_prop
 	 */
 	public function parse_date_field( $value ) {
-		if ( empty( $value ) ) {
+		if ( empty($value) ) {
 			return null;
 		}
-
-		if ( preg_match( '/^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])([ 01-9:]*)$/', $value ) ) {
-			// Don't include the time if the field had time in it.
-			return current( explode( ' ', $value ) );
+		// If timestamp, return timestamp.
+		if ( is_numeric( $value ) ) {
+			return intval( $value );
 		}
-
-		return null;
+		// Strings are defined in local WP timezone. Convert to UTC before returning timestamp.
+		if ( 1 === preg_match( '/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(Z|((-|\+)\d{2}:\d{2}))$/', $value, $date_bits ) ) {
+			$offset    = ! empty( $date_bits[7] ) ? iso8601_timezone_to_offset( $date_bits[7] ) : wc_timezone_offset();
+			$timestamp = gmmktime( $date_bits[4], $date_bits[5], $date_bits[6], $date_bits[2], $date_bits[3], $date_bits[1] );
+			return $timestamp ? intval( $timestamp  - $offset ): null;
+		}
+		// Force string to timestamp.
+		return wc_string_to_timestamp( get_gmt_from_date( gmdate( 'Y-m-d H:i:s', wc_string_to_timestamp( $value ) ) ) );
 	}
 
 	/**
